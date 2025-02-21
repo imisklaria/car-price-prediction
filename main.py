@@ -5,7 +5,7 @@ import numpy as np
 import xgboost as xgb
 
 # Load the trained XGBoost model
-model = joblib.load("xgboost_model.pkl")
+model = joblib.load("model.pkl")
 
 # Initialize FastAPI app
 app = FastAPI()
