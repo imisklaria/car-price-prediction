@@ -1,16 +1,22 @@
+import xgboost as xgb
+import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
-import joblib
-import numpy as np
-import xgboost as xgb
 
-# Load the trained XGBoost model
-model = joblib.load("model.pkl")
+# Load trained XGBoost model
+model = xgb.Booster()
+model.load_model("model.xgb")
 
-# Initialize FastAPI app
-app = FastAPI()
+# Print feature names after loading
+print("Feature names in API-loaded model:", model.feature_names)
 
-# Define the input schema
+app = FastAPI(
+    title="Car Price Prediction API",
+    description="Predict car prices based on engine specifications and features using a trained XGBoost model.",
+    version="1.0.0"
+)
+
+# Define API Input Schema
 class CarFeatures(BaseModel):
     Engine_volume: float
     Mileage: float
@@ -32,29 +38,30 @@ class CarFeatures(BaseModel):
     Fuel_Hydrogen: bool
     Fuel_LPG: bool
     Fuel_Petrol: bool
-    Fuel_Plug_in_Hybrid: bool  # Renamed for Python variable compatibility
+    Fuel_Plug_in_Hybrid: bool
     Leather_No: bool
     Leather_Yes: bool
 
 @app.post("/predict/")
 def predict(input_data: CarFeatures):
     try:
-        # Convert input to a NumPy array for XGBoost
-        input_features = np.array([[
-            input_data.Engine_volume, input_data.Mileage, input_data.Cylinders,
-            input_data.Doors, input_data.Airbags, int(input_data.Turbo), input_data.Age,
-            int(input_data.Drive_4x4), int(input_data.Drive_Front), int(input_data.Drive_Rear),
-            int(input_data.Gear_Automatic), int(input_data.Gear_Manual),
-            int(input_data.Gear_Tiptronic), int(input_data.Gear_Variator),
-            int(input_data.Fuel_CNG), int(input_data.Fuel_Diesel), int(input_data.Fuel_Hybrid),
-            int(input_data.Fuel_Hydrogen), int(input_data.Fuel_LPG), int(input_data.Fuel_Petrol),
-            int(input_data.Fuel_Plug_in_Hybrid), int(input_data.Leather_No), int(input_data.Leather_Yes)
-        ]]).astype(float)  # Ensure everything is in float format for XGBoost
+        # Convert input to DataFrame
+        input_df = pd.DataFrame([input_data.dict()])
 
-        # Make a prediction using XGBoost
-        prediction = model.predict(xgb.DMatrix(input_features))
+        # Print received feature names for debugging
+        print("Feature names received from API input:", input_df.columns.tolist())
 
-        return {"predicted_value": float(prediction[0])}
+        # Ensure columns match the model's feature names (Force correct order)
+        input_df = input_df[model.feature_names]
+
+        # Convert DataFrame to XGBoost DMatrix
+        dmatrix = xgb.DMatrix(input_df, feature_names=model.feature_names)
+
+        # Make prediction
+        prediction = model.predict(dmatrix)
+
+        return {"predicted_price": float(prediction[0])}
 
     except Exception as e:
         return {"error": str(e)}
+
